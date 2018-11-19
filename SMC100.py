@@ -24,6 +24,8 @@ from PyTango import AttrQuality,DispLevel, DevState
 from PyTango import AttrWriteType, PipeWriteType
 # Additional import
 # PROTECTED REGION ID(SMC100.additionnal_import) ENABLED START #
+from time import sleep
+import pyserial
 # PROTECTED REGION END #    //  SMC100.additionnal_import
 
 
@@ -35,9 +37,13 @@ class SMC100(Device):
     # PROTECTED REGION END #    //  SMC100.class_variable
     # ----------------
     # Class Properties
+
     # ----------------
 
-    # -----------------
+    # read name of serial port ('com1' .. (Windows) or '/dev/ttyUSB0' .. (Linux)) 
+    # read the address of the device (1..31)
+
+# -----------------
     # Device Properties
     # -----------------
 
@@ -47,6 +53,41 @@ class SMC100(Device):
     Port = device_property(
         dtype='str',
     )
+
+
+# some Constants
+__EOL = '\r\n'
+
+
+# time to wait after sending a command.
+COMMAND_WAIT_TIME_SEC = 0.06
+
+# Errors from page 64 of the manual
+__ERROR_NEG_END_OF_RUN = 1
+__ERROR_POS_END_OF_RUN = 2
+
+
+# States from page 65 of the manual
+__STATE_NOT_REFERENCED = ('0A', '0B', '0c' ,'0D', '0E', '0F', '10')
+__STATE_READY = ('32', '33', '34', '35')
+
+__STATE_MOVING = '28'
+
+# some private variables
+    __ser_port = None
+    __smcID    = ''
+    __Port     = ''
+    
+    __smc_state    = ''
+
+# private status variables, are are updated by "get_smc__state()"
+    __Limit_Minus = False
+    __Limit_Plus  = False
+    __Motor_Run   = False
+    __Referenced  = False
+    __Homing      = False
+    __Pos         = 0.0
+    
     # ----------
     # Attributes
     # ----------
@@ -57,7 +98,7 @@ class SMC100(Device):
     limit_plus = attribute(
         dtype='bool',
     )
-    run = attribute(
+    moving = attribute(
         dtype='bool',
     )
     position = attribute(
@@ -68,6 +109,17 @@ class SMC100(Device):
         display_unit="mm",
         format="%8.3",
     )
+    ready = attribute(
+        dtype='bool',
+    )
+    homing = attribute(
+        dtype='bool',
+    )
+    referenced = attribute(
+        dtype='bool',
+    )
+    
+    
     # -----
     # Pipes
     # -----
@@ -79,6 +131,38 @@ class SMC100(Device):
     def init_device(self):
         Device.init_device(self)
         # PROTECTED REGION ID(SMC100.init_device) ENABLED START #
+        
+        self.proxy = DeviceProxy(self.get_name())
+        
+        self.__smcID = self.Address
+        self.__Port  = self.Port
+        
+        if flagDebugIO:
+            print("Get_name: %s" % (self.get_name()))
+            print 'Connecting to SMC100 on %s'%(port)
+            
+        self.__ser_port = serial.Serial(
+            port = self.__port,
+            baudrate = 57600,
+            bytesize = 8,
+            stopbits = 1,
+            parity = 'N',
+            xonxoff = True,
+            timeout = 0.050)    
+        
+        if ("SMC_CC" in self.read_controller_info()):
+            self.get_smc_state()
+            self.read_position()
+            self.set_state(PyTango.DevState.ON)  
+        else:
+            self.set_state(PyTango.DevState.OFF)
+        
+        if flagDebugIO:
+            print "Limit-: ",self.__Limit_Minus
+            print "Limit+: ",self.__Limit_Plus
+            print "Run: ",self.__Motor_Run
+            print "Postion: ", self.__Pos    
+            
         # PROTECTED REGION END #    //  SMC100.init_device
 
     def always_executed_hook(self):
@@ -90,36 +174,68 @@ class SMC100(Device):
         # PROTECTED REGION ID(SMC100.delete_device) ENABLED START #
         pass
         # PROTECTED REGION END #    //  SMC100.delete_device
+    
+    
+    def read_controller_info(self):
+        return self.write_read('VE?'
+    
+    def send_cmd(self, cmd):
+        # PROTECTED REGION ID(SMC100.send_cmd) ENABLED START #
+        snd_str = cmd + EOL
+        self.__ser.flushOutput()
+        self.__ser.write(snd_str)
+        self.__ser.flush()
+        # PROTECTED REGION END #    //  SMC100.send_cmd    
 
+    def get_position(self):
+        pos = write_read('PA?')
+        if pos != '':
+            self.__Pos = float(pos)
+        
+        
     # ------------------
     # Attributes methods
     # ------------------
 
     def read_limit_minus(self):
         # PROTECTED REGION ID(SMC100.limit_minus_read) ENABLED START #
-        return False
+        return self.__Limit_Minus
         # PROTECTED REGION END #    //  SMC100.limit_minus_read
 
     def read_limit_plus(self):
         # PROTECTED REGION ID(SMC100.limit_plus_read) ENABLED START #
-        return False
+        return self.__Limit_Plus
         # PROTECTED REGION END #    //  SMC100.limit_plus_read
 
-    def read_run(self):
-        # PROTECTED REGION ID(SMC100.run_read) ENABLED START #
-        return False
-        # PROTECTED REGION END #    //  SMC100.run_read
+    def read_moving(self):
+        # PROTECTED REGION ID(SMC100.moving_read) ENABLED START #
+        return self.__Motor_Run
+        # PROTECTED REGION END #    //  SMC100.moving_read
 
     def read_position(self):
         # PROTECTED REGION ID(SMC100.position_read) ENABLED START #
-        return 0.0
+        return self.__Pos
         # PROTECTED REGION END #    //  SMC100.position_read
 
     def write_position(self, value):
         # PROTECTED REGION ID(SMC100.position_write) ENABLED START #
-        pass
+            write_read('PA' + str(value))
         # PROTECTED REGION END #    //  SMC100.position_write
 
+    def read_ready(self):
+        # PROTECTED REGION ID(SMC100.ready_read) ENABLED START #
+        return self.__Ready
+        # PROTECTED REGION END #    //  SMC100.ready_read
+
+    def read_homing(self):
+        # PROTECTED REGION ID(SMC100.homing_read) ENABLED START #
+        return self.__Homing
+        # PROTECTED REGION END #    //  SMC100.homing_read
+
+    def read_referenced(self):
+        # PROTECTED REGION ID(SMC100.homing_read) ENABLED START #
+        return self.__Referenced
+        # PROTECTED REGION END #    //  SMC100.homing_read
     # -------------
     # Pipes methods
     # -------------
@@ -127,6 +243,31 @@ class SMC100(Device):
     # --------
     # Commands
     # --------
+    @command(dtype_in='str', 
+    dtype_out='str', 
+    )
+    @DebugIt()
+    def write_read(self, argin):
+        # PROTECTED REGION ID(SMC100.write_read) ENABLED START #
+        # if argin ended with "?", then we expected an answer
+        response = (argin[-1] == '?')
+        if response:
+            # cut the "?"
+            prefix = self.__smcID + argin[:-1]
+            send_str = argin
+            self.__ser_port.flushInput()
+            self.send_cmd(send_str)
+        else:    
+            send_str = self.__smcID + argin[:-1]
+            self.send_cmd(send_str)
+        if response:
+            answer = self.ser.readline()
+            if answer.startswith(prefix):
+                return answer[len(prefix):]
+        else:
+            return ''
+        # PROTECTED REGION END #    //  SMC100.write_read
+        
 
     @command(
     dtype_out='float', 
@@ -134,7 +275,8 @@ class SMC100(Device):
     @DebugIt()
     def get_velocity(self):
         # PROTECTED REGION ID(SMC100.get_velocity) ENABLED START #
-        return 0.0
+            v = self.write_read('VA?')
+        return float(v)
         # PROTECTED REGION END #    //  SMC100.get_velocity
 
     @command(dtype_in='float', 
@@ -142,7 +284,12 @@ class SMC100(Device):
     @DebugIt()
     def set_velocity(self, argin):
         # PROTECTED REGION ID(SMC100.set_velocity) ENABLED START #
-        pass
+        # enter config mode
+            self.write_read('PW1')
+            self.write_read('VA' + str(argin))
+            # exit configuration mode
+            # store new acceleration in nvram
+            self.write_read('PW0')
         # PROTECTED REGION END #    //  SMC100.set_velocity
 
     @command(
@@ -151,7 +298,9 @@ class SMC100(Device):
     @DebugIt()
     def get_acceleration(self):
         # PROTECTED REGION ID(SMC100.get_acceleration) ENABLED START #
-        return 0.0
+            acc = self.write_read('AC?')
+            
+        return float(acc)
         # PROTECTED REGION END #    //  SMC100.get_acceleration
 
     @command(dtype_in='float', 
@@ -159,30 +308,45 @@ class SMC100(Device):
     @DebugIt()
     def set_acceleration(self, argin):
         # PROTECTED REGION ID(SMC100.set_acceleration) ENABLED START #
-        pass
+            # enter config mode
+            self.write_read('PW1')
+            self.write_read('AC' + str(argin))
+            # exit configuration mode
+            # store new acceleration in nvram
+            self.write_read('PW0')
         # PROTECTED REGION END #    //  SMC100.set_acceleration
 
     @command
     @DebugIt()
     def stop_motion(self):
         # PROTECTED REGION ID(SMC100.stop_motion) ENABLED START #
-        pass
+        self.write_read('ST')
         # PROTECTED REGION END #    //  SMC100.stop_motion
-
-    @command(dtype_in='str', 
-    dtype_out='str', 
-    )
+    
+    
+    @command ()#(polling_period=200, doc_out='state of SMC100' ) 
     @DebugIt()
-    def send_cmd(self, argin):
-        # PROTECTED REGION ID(SMC100.send_cmd) ENABLED START #
-        return ""
-        # PROTECTED REGION END #    //  SMC100.send_cmd
+    def get_smc_state(self):
+        # PROTECTED REGION ID(SMC100.get_smc_state) ENABLED START #
+        get_position(self)
+        resp = self.write_read('TS?')
+        if state != '':
+            error = int(resp[:4],16)
+            self.__smc_state = resp[4:]
+            self.__Limit_Minus = self.__ERROR_NEG_END_OF_RUN & error
+            self.__Limit_Plus  = self.__ERROR_POS_END_OF_RUN & error
+            self.__Motor_Run   = self.__smc_state = self.__STATE_MOVING
+            self.__Referenced  = self.__smc_state not in self.__STATE_NOT_REFERENCED
+            self.__Ready       = self.__smc_state in self.__STATE_READY
+        # PROTECTED REGION END #    //  SMC100.get_smc_state
+
+    
 
     @command
     @DebugIt()
     def homing(self):
         # PROTECTED REGION ID(SMC100.homing) ENABLED START #
-        pass
+        self.write_read('OR')
         # PROTECTED REGION END #    //  SMC100.homing
 
 # ----------

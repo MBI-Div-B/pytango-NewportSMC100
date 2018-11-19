@@ -1,0 +1,50 @@
+AC - Get/Set acceleration
+-------------------------
+Syntax:	xxACnn or xxAC? 
+Parameters 
+Description  	xx [int]	—  Controller address. 
+		nn [float]	—  Acceleration value. 
+Range  		xx		—  1 to 31 
+		nn		—  > 1E-6 and < 1E12
+Units		xx		—  None 
+		nn		—  Preset units/s2
+ 
+
+Example		1AC500  |  Set controller #1 acceleration to 500 units/s2
+		1AC?	|  Controller returns 1AC500. 
+
+
+ID — Set/Get stage identifier
+-----------------------------
+Example		1ID?	|  Get stage identifier for controller #1. 
+			|  Controller returns URS100CC. 
+
+MM — Enter/Leave DISABLE state
+------------------------------
+           
+Syntax:	xxMMnn or xxMM? 
+Parameters 
+Description	xx [int]	—  Controller address. 
+		nn [float]	—  Velocity feed forward value. 
+Range		xx		—  0 to 31 
+		nn		—  0 changes state from READY to DISABLE. 
+				   1 changes state from DISABLE to READY. 
+
+OR — Execute HOME search
+------------------------
+       
+Syntax:	xxOR 
+Parameters 
+Description	xx [int]	—  Controller address. 
+Range		xx		—  1 to 31 
+Description
+This command starts the execution of the HOME search as defined by the HT 
+command. When in NOT REFERENCED state, for instance after system start, any positioner 
+first get homed with the OR command before further motion commands can get 
+executed. 
+The OR command gets accepted only in NOT REFERENCED state and only with n
+present hardware errors, except for end-of-run maybe. Refer to the TS command to
+more information on the possible hardware errors. 
+
+Example		1OR	|  Execute HOME search with controller #1. 
+
