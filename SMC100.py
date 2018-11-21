@@ -15,7 +15,7 @@ __all__ = ["SMC100", "main"]
 
 # PyTango imports
 import PyTango
-from PyTango import DebugIt
+from PyTango import DebugIt, DeviceProxy
 from PyTango.server import run
 from PyTango.server import Device, DeviceMeta
 from PyTango.server import attribute, command, pipe
@@ -25,8 +25,10 @@ from PyTango import AttrWriteType, PipeWriteType
 # Additional import
 # PROTECTED REGION ID(SMC100.additionnal_import) ENABLED START #
 from time import sleep
-import pyserial
+import serial
 # PROTECTED REGION END #    //  SMC100.additionnal_import
+
+flagDebugIO = 1
 
 
 class SMC100(Device):
@@ -55,31 +57,32 @@ class SMC100(Device):
     )
 
 
-# some Constants
-__EOL = '\r\n'
+    # some Constants
+    __EOL = '\r\n'
 
 
 # time to wait after sending a command.
-COMMAND_WAIT_TIME_SEC = 0.06
+    COMMAND_WAIT_TIME_SEC = 0.06
 
 # Errors from page 64 of the manual
-__ERROR_NEG_END_OF_RUN = 1
-__ERROR_POS_END_OF_RUN = 2
+    __ERROR_NEG_END_OF_RUN = 1
+    __ERROR_POS_END_OF_RUN = 2
 
 
 # States from page 65 of the manual
-__STATE_NOT_REFERENCED = ('0A', '0B', '0c' ,'0D', '0E', '0F', '10')
-__STATE_READY = ('32', '33', '34', '35')
+    __STATE_NOT_REFERENCED = ('0A', '0B', '0c' ,'0D', '0E', '0F', '10')
+    __STATE_READY = ('32', '33', '34', '35')
 
-__STATE_MOVING = '28'
+    __STATE_MOVING = '28'
 
 # some private variables
     __ser_port = None
     __smcID    = ''
-    __Port     = ''
+    __port     = ''
     
     __smc_state    = ''
-
+    __error        = ''
+    
 # private status variables, are are updated by "get_smc__state()"
     __Limit_Minus = False
     __Limit_Plus  = False
@@ -87,14 +90,19 @@ __STATE_MOVING = '28'
     __Referenced  = False
     __Homing      = False
     __Pos         = 0.0
+    __acceleration= 0.0
+    __velocity    = 0.0
+
+
+
     
     # ----------
     # Attributes
     # ----------
 
     limit_minus = attribute(
-        dtype='bool',
-    )
+        dtype='bool',)
+    
     limit_plus = attribute(
         dtype='bool',
     )
@@ -134,8 +142,8 @@ __STATE_MOVING = '28'
         
         self.proxy = DeviceProxy(self.get_name())
         
-        self.__smcID = self.Address
-        self.__Port  = self.Port
+        self.__smcID = str(self.Address)
+        self.__port  = self.Port
         
         if flagDebugIO:
             print("Get_name: %s" % (self.get_name()))
@@ -177,18 +185,18 @@ __STATE_MOVING = '28'
     
     
     def read_controller_info(self):
-        return self.write_read('VE?'
+        return (self.write_read('VE?'))
     
     def send_cmd(self, cmd):
         # PROTECTED REGION ID(SMC100.send_cmd) ENABLED START #
-        snd_str = cmd + EOL
-        self.__ser.flushOutput()
-        self.__ser.write(snd_str)
-        self.__ser.flush()
+        snd_str = cmd + self.__EOL
+        self.__ser_port.flushOutput()
+        self.__ser_port.write(snd_str)
+        self.__ser_port.flush()
         # PROTECTED REGION END #    //  SMC100.send_cmd    
 
     def get_position(self):
-        pos = write_read('PA?')
+        pos = self.write_read('PA?')
         if pos != '':
             self.__Pos = float(pos)
         
@@ -219,7 +227,7 @@ __STATE_MOVING = '28'
 
     def write_position(self, value):
         # PROTECTED REGION ID(SMC100.position_write) ENABLED START #
-            write_read('PA' + str(value))
+        self.write_read('PA' + str(value))
         # PROTECTED REGION END #    //  SMC100.position_write
 
     def read_ready(self):
@@ -243,8 +251,8 @@ __STATE_MOVING = '28'
     # --------
     # Commands
     # --------
-    @command(dtype_in='str', 
-    dtype_out='str', 
+    @command(dtype_in=str, 
+    dtype_out=str, 
     )
     @DebugIt()
     def write_read(self, argin):
@@ -257,63 +265,71 @@ __STATE_MOVING = '28'
             send_str = argin
             self.__ser_port.flushInput()
             self.send_cmd(send_str)
+            tmp_answer = self.__ser_port.readline()
+            if tmp_answer.startswith(prefix):
+                answer = tmp_answer[len(prefix):]
+            else:
+                answer = ''    
         else:    
             send_str = self.__smcID + argin[:-1]
             self.send_cmd(send_str)
-        if response:
-            answer = self.ser.readline()
-            if answer.startswith(prefix):
-                return answer[len(prefix):]
-        else:
-            return ''
+            answer = ''
+        return answer
         # PROTECTED REGION END #    //  SMC100.write_read
         
 
     @command(
-    dtype_out='float', 
+    dtype_out=float, 
     )
     @DebugIt()
     def get_velocity(self):
         # PROTECTED REGION ID(SMC100.get_velocity) ENABLED START #
-            v = self.write_read('VA?')
-        return float(v)
+        v= self.write_read('VA?')
+        if '' == v:
+            return self.__velocity
+        else:
+            self.__velocity = float(v)
+            return self.__velocity
         # PROTECTED REGION END #    //  SMC100.get_velocity
 
-    @command(dtype_in='float', 
+    @command(dtype_in=float, 
     )
     @DebugIt()
     def set_velocity(self, argin):
         # PROTECTED REGION ID(SMC100.set_velocity) ENABLED START #
         # enter config mode
-            self.write_read('PW1')
-            self.write_read('VA' + str(argin))
-            # exit configuration mode
-            # store new acceleration in nvram
-            self.write_read('PW0')
+        self.write_read('PW1')
+        self.write_read('VA' + str(argin))
+        # exit configuration mode
+        # store new acceleration in nvram
+        self.write_read('PW0')
         # PROTECTED REGION END #    //  SMC100.set_velocity
 
     @command(
-    dtype_out='float', 
+    dtype_out=float, 
     )
     @DebugIt()
     def get_acceleration(self):
         # PROTECTED REGION ID(SMC100.get_acceleration) ENABLED START #
-            acc = self.write_read('AC?')
-            
-        return float(acc)
+        acc = self.write_read('AC?')
+        if '' == acc:
+            return self.__acceleration
+        else:
+            self.__acceleration = float(acc)
+            return self.__acceleration
         # PROTECTED REGION END #    //  SMC100.get_acceleration
 
-    @command(dtype_in='float', 
+    @command(dtype_in=float, 
     )
     @DebugIt()
     def set_acceleration(self, argin):
         # PROTECTED REGION ID(SMC100.set_acceleration) ENABLED START #
-            # enter config mode
-            self.write_read('PW1')
-            self.write_read('AC' + str(argin))
-            # exit configuration mode
-            # store new acceleration in nvram
-            self.write_read('PW0')
+        # enter config mode
+        self.write_read('PW1')
+        self.write_read('AC' + str(argin))
+        # exit configuration mode
+        # store new acceleration in nvram
+        self.write_read('PW0')
         # PROTECTED REGION END #    //  SMC100.set_acceleration
 
     @command
@@ -328,10 +344,10 @@ __STATE_MOVING = '28'
     @DebugIt()
     def get_smc_state(self):
         # PROTECTED REGION ID(SMC100.get_smc_state) ENABLED START #
-        get_position(self)
+        self.read_position()
         resp = self.write_read('TS?')
-        if state != '':
-            error = int(resp[:4],16)
+        if (resp != ''):
+            #self.__error = resp[:4]
             self.__smc_state = resp[4:]
             self.__Limit_Minus = self.__ERROR_NEG_END_OF_RUN & error
             self.__Limit_Plus  = self.__ERROR_POS_END_OF_RUN & error
