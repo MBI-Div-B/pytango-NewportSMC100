@@ -1,0 +1,22 @@
+---------------------------
+Do 22. Nov 11:33:19 CET 2018
+Tangohost:  10.6.16.78
+ping Tangohost successful!
+starting SMC100 device
+14439 python
+starting SMC100 successful!
+Get_name: hhg/SMC100/Ctrl1
+Connecting to SMC100 on /dev/ttyUSB0
+Device address: 1
+Limit-:  True
+Limit+:  True
+Run:  False
+Postion:  0.0
+Ready to accept request
+---------------------------
+Do 22. Nov 11:34:02 CET 2018
+Tangohost:  10.6.16.78
+ping Tangohost successful!
+starting SMC100 device
+2860 python
+starting SMC100 successful!
