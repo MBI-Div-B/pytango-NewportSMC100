@@ -252,7 +252,7 @@ class SMC100(Device):
     def write_position(self, value):
         # PROTECTED REGION ID(SMC100.position_write) ENABLED START #
         self.write_read('PA' + str(value))
-        if (self.__ERROR_OUT_OF_RANG in get_cmd_error_string():
+        if self.__ERROR_OUT_OF_RANGE == self.get_cmd_error_string():
             self.__Out_Of_Range = True
         else:
             self.__Out_Of_Range = False     
@@ -401,6 +401,10 @@ class SMC100(Device):
     def reset(self):
         # PROTECTED REGION ID(SMC100.reset) ENABLED START #
         self.write_read('RS')
+        if self.__ERROR_OUT_OF_RANGE == self.get_cmd_error_string():
+            self.__Out_Of_Range = True
+        else:
+            self.__Out_Of_Range = False   
         # PROTECTED REGION END #    //  SMC100.reset
 
 # ----------
