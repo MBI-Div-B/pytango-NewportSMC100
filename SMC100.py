@@ -67,7 +67,7 @@ class SMC100(Device):
 # Errors from page 64 of the manual
     __ERROR_NEG_END_OF_RUN = 1
     __ERROR_POS_END_OF_RUN = 2
-
+    __ERROR_OUT_OF_RANGE   = 'C'
 
 # States from page 65 of the manual
     __STATE_NOT_REFERENCED = ('0A', '0B', '0c' ,'0D', '0E', '0F', '10')
@@ -89,9 +89,10 @@ class SMC100(Device):
     __Motor_Run   = False
     __Referenced  = False
     __Homing      = False
-    __Pos         = 0.0
-    __acceleration= 0.0
-    __velocity    = 0.0
+    __Out_Of_Range= False
+    __Pos         = 0.000
+    __acceleration= 0.000
+    __velocity    = 0.000
 
 
 
@@ -100,13 +101,18 @@ class SMC100(Device):
     # Attributes
     # ----------
 
-    limit_minus = attribute(
-        dtype='bool',)
+    # limit_minus = attribute(
+    #     dtype='bool',)
+    # 
+    # limit_plus = attribute(
+    #     dtype='bool',
+    # )
     
-    limit_plus = attribute(
+    
+    moving = attribute(
         dtype='bool',
     )
-    moving = attribute(
+    range_error = attribute(
         dtype='bool',
     )
     position = attribute(
@@ -115,7 +121,7 @@ class SMC100(Device):
         label="mm",
         unit="mm",
         display_unit="mm",
-        format="%8.3",
+        format="%8.4f",
     )
     ready = attribute(
         dtype='bool',
@@ -147,7 +153,8 @@ class SMC100(Device):
         
         if flagDebugIO:
             print("Get_name: %s" % (self.get_name()))
-            print 'Connecting to SMC100 on %s'%(port)
+            print("Connecting to SMC100 on %s" %(self.__port))
+            print("Device address: %s" %(self.__smcID))
             
         self.__ser_port = serial.Serial(
             port = self.__port,
@@ -158,6 +165,11 @@ class SMC100(Device):
             xonxoff = True,
             timeout = 0.050)    
         
+        
+        if self.__ser_port.isOpen():
+            self.__ser_port.close()
+        self.__ser_port.open()
+        
         if ("SMC_CC" in self.read_controller_info()):
             self.get_smc_state()
             self.read_position()
@@ -165,9 +177,10 @@ class SMC100(Device):
         else:
             self.set_state(PyTango.DevState.OFF)
         
+        
         if flagDebugIO:
-            print "Limit-: ",self.__Limit_Minus
-            print "Limit+: ",self.__Limit_Plus
+            # print "Limit-: ",self.__Limit_Minus
+            # print "Limit+: ",self.__Limit_Plus
             print "Run: ",self.__Motor_Run
             print "Postion: ", self.__Pos    
             
@@ -180,7 +193,8 @@ class SMC100(Device):
 
     def delete_device(self):
         # PROTECTED REGION ID(SMC100.delete_device) ENABLED START #
-        pass
+        if self.__ser_port.isOpen():
+            self.__ser_port.close()
         # PROTECTED REGION END #    //  SMC100.delete_device
     
     
@@ -196,24 +210,34 @@ class SMC100(Device):
         # PROTECTED REGION END #    //  SMC100.send_cmd    
 
     def get_position(self):
-        pos = self.write_read('PA?')
+        pos = self.write_read('TP?')
         if pos != '':
-            self.__Pos = float(pos)
+            self.__Pos = float(pos)   
+
+    def get_cmd_error_string(self):
+        error = self.write_read('TE?')
+        return error
         
         
     # ------------------
     # Attributes methods
     # ------------------
 
-    def read_limit_minus(self):
-        # PROTECTED REGION ID(SMC100.limit_minus_read) ENABLED START #
-        return self.__Limit_Minus
-        # PROTECTED REGION END #    //  SMC100.limit_minus_read
+    # def read_limit_minus(self):
+    #     # PROTECTED REGION ID(SMC100.limit_minus_read) ENABLED START #
+    #     return self.__Limit_Minus
+    #     # PROTECTED REGION END #    //  SMC100.limit_minus_read
 
-    def read_limit_plus(self):
-        # PROTECTED REGION ID(SMC100.limit_plus_read) ENABLED START #
-        return self.__Limit_Plus
-        # PROTECTED REGION END #    //  SMC100.limit_plus_read
+   ##   def read_limit_plus(self):
+    #     # PROTECTED REGION ID(SMC100.limit_plus_read) ENABLED START #
+    #     return self.__Limit_Plus
+    #     # PROTECTED REGION END #    //  SMC100.limit_plus_read
+
+
+    def range_error(self):
+        # PROTECTED REGION ID(SMC100.range_error) ENABLED START #
+        return self.__Out_Of_Range
+        # PROTECTED REGION END #    //  SMC100.range_error
 
     def read_moving(self):
         # PROTECTED REGION ID(SMC100.moving_read) ENABLED START #
@@ -228,6 +252,10 @@ class SMC100(Device):
     def write_position(self, value):
         # PROTECTED REGION ID(SMC100.position_write) ENABLED START #
         self.write_read('PA' + str(value))
+        if (self.__ERROR_OUT_OF_RANG in get_cmd_error_string():
+            self.__Out_Of_Range = True
+        else:
+            self.__Out_Of_Range = False     
         # PROTECTED REGION END #    //  SMC100.position_write
 
     def read_ready(self):
@@ -262,7 +290,7 @@ class SMC100(Device):
         if response:
             # cut the "?"
             prefix = self.__smcID + argin[:-1]
-            send_str = argin
+            send_str = self.__smcID + argin
             self.__ser_port.flushInput()
             self.send_cmd(send_str)
             tmp_answer = self.__ser_port.readline()
@@ -271,7 +299,7 @@ class SMC100(Device):
             else:
                 answer = ''    
         else:    
-            send_str = self.__smcID + argin[:-1]
+            send_str = self.__smcID + argin
             self.send_cmd(send_str)
             answer = ''
         return answer
@@ -340,20 +368,23 @@ class SMC100(Device):
         # PROTECTED REGION END #    //  SMC100.stop_motion
     
     
-    @command ()#(polling_period=200, doc_out='state of SMC100' ) 
+    @command (
+    dtype_out=str, polling_period= 200, doc_out='state of SMC100' ) 
     @DebugIt()
     def get_smc_state(self):
         # PROTECTED REGION ID(SMC100.get_smc_state) ENABLED START #
-        self.read_position()
+        self.get_position()
+        resp = ''
         resp = self.write_read('TS?')
         if (resp != ''):
-            #self.__error = resp[:4]
+            self.__error = int(resp[:4],16)
             self.__smc_state = resp[4:]
-            self.__Limit_Minus = self.__ERROR_NEG_END_OF_RUN & error
-            self.__Limit_Plus  = self.__ERROR_POS_END_OF_RUN & error
-            self.__Motor_Run   = self.__smc_state = self.__STATE_MOVING
-            self.__Referenced  = self.__smc_state not in self.__STATE_NOT_REFERENCED
+            # self.__Limit_Minus = bool(self.__ERROR_NEG_END_OF_RUN & self.__error)
+            # self.__Limit_Plus  = bool(self.__ERROR_POS_END_OF_RUN & self.__error)
+            self.__Motor_Run   = self.__smc_state == self.__STATE_MOVING
+            self.__Referenced  = self.__smc_state in self.__STATE_NOT_REFERENCED
             self.__Ready       = self.__smc_state in self.__STATE_READY
+        return resp
         # PROTECTED REGION END #    //  SMC100.get_smc_state
 
     
@@ -364,6 +395,13 @@ class SMC100(Device):
         # PROTECTED REGION ID(SMC100.homing) ENABLED START #
         self.write_read('OR')
         # PROTECTED REGION END #    //  SMC100.homing
+    
+    @command
+    @DebugIt()
+    def reset(self):
+        # PROTECTED REGION ID(SMC100.reset) ENABLED START #
+        self.write_read('RS')
+        # PROTECTED REGION END #    //  SMC100.reset
 
 # ----------
 # Run server
