@@ -5,11 +5,11 @@
 
 # Exportieren der Variable TANGO_HOST fuer die Bash-Shell
 
-#export TANGO_HOST=angstrom.hhg.lab:10000
-export TANGO_HOST=10.6.16.78:10000
+export TANGO_HOST=angstrom.hhg.lab:10000
+#export TANGO_HOST=10.6.16.78:10000
 
-#TANGOHOST=angstrom.hhg.lab
-TANGOHOST=10.6.16.78
+TANGOHOST=angstrom.hhg.lab
+#TANGOHOST=10.6.16.78
 
 #Umleiten der Ausgabe in eine Log-Datei
 exec &>> /home/pi/Tango_Devices/SMC100/device.log

@@ -28,7 +28,7 @@ from time import sleep
 import serial
 # PROTECTED REGION END #    //  SMC100.additionnal_import
 
-flagDebugIO = 1
+flagDebugIO = 0
 
 
 class SMC100(Device):
@@ -70,7 +70,7 @@ class SMC100(Device):
     __ERROR_OUT_OF_RANGE   = 'C'
 
 # States from page 65 of the manual
-    __STATE_NOT_REFERENCED = ('0A', '0B', '0c' ,'0D', '0E', '0F', '10')
+    __STATE_NOT_REFERENCED = ('3C', '0A', '0B', '0c' ,'0D', '0E', '0F', '10')
     __STATE_READY = ('32', '33', '34', '35')
 
     __STATE_MOVING = '28'
@@ -101,18 +101,12 @@ class SMC100(Device):
     # Attributes
     # ----------
 
-    # limit_minus = attribute(
-    #     dtype='bool',)
-    # 
-    # limit_plus = attribute(
-    #     dtype='bool',
-    # )
     
     
-    moving = attribute(
+    range_error = attribute(
         dtype='bool',
     )
-    range_error = attribute(
+    moving = attribute(
         dtype='bool',
     )
     position = attribute(
@@ -122,9 +116,6 @@ class SMC100(Device):
         unit="mm",
         display_unit="mm",
         format="%8.4f",
-    )
-    ready = attribute(
-        dtype='bool',
     )
     homing = attribute(
         dtype='bool',
@@ -216,25 +207,15 @@ class SMC100(Device):
 
     def get_cmd_error_string(self):
         error = self.write_read('TE?')
-        return error
+        return error.strip()
         
         
     # ------------------
     # Attributes methods
     # ------------------
 
-    # def read_limit_minus(self):
-    #     # PROTECTED REGION ID(SMC100.limit_minus_read) ENABLED START #
-    #     return self.__Limit_Minus
-    #     # PROTECTED REGION END #    //  SMC100.limit_minus_read
-
-   ##   def read_limit_plus(self):
-    #     # PROTECTED REGION ID(SMC100.limit_plus_read) ENABLED START #
-    #     return self.__Limit_Plus
-    #     # PROTECTED REGION END #    //  SMC100.limit_plus_read
-
-
-    def range_error(self):
+    
+    def read_range_error(self):
         # PROTECTED REGION ID(SMC100.range_error) ENABLED START #
         return self.__Out_Of_Range
         # PROTECTED REGION END #    //  SMC100.range_error
@@ -258,10 +239,6 @@ class SMC100(Device):
             self.__Out_Of_Range = False     
         # PROTECTED REGION END #    //  SMC100.position_write
 
-    def read_ready(self):
-        # PROTECTED REGION ID(SMC100.ready_read) ENABLED START #
-        return self.__Ready
-        # PROTECTED REGION END #    //  SMC100.ready_read
 
     def read_homing(self):
         # PROTECTED REGION ID(SMC100.homing_read) ENABLED START #
@@ -369,7 +346,7 @@ class SMC100(Device):
     
     
     @command (
-    dtype_out=str, polling_period= 200, doc_out='state of SMC100' ) 
+    dtype_out=str, polling_period= 100, doc_out='state of SMC100' ) 
     @DebugIt()
     def get_smc_state(self):
         # PROTECTED REGION ID(SMC100.get_smc_state) ENABLED START #
@@ -378,12 +355,17 @@ class SMC100(Device):
         resp = self.write_read('TS?')
         if (resp != ''):
             self.__error = int(resp[:4],16)
-            self.__smc_state = resp[4:]
-            # self.__Limit_Minus = bool(self.__ERROR_NEG_END_OF_RUN & self.__error)
-            # self.__Limit_Plus  = bool(self.__ERROR_POS_END_OF_RUN & self.__error)
-            self.__Motor_Run   = self.__smc_state == self.__STATE_MOVING
-            self.__Referenced  = self.__smc_state in self.__STATE_NOT_REFERENCED
-            self.__Ready       = self.__smc_state in self.__STATE_READY
+            self.__smc_state = resp[4:].strip()
+            if (self.__smc_state == self.__STATE_MOVING):
+                self.__Motor_Run   = True
+            else:
+                self.__Motor_Run   = False
+            if self.__smc_state in self.__STATE_NOT_REFERENCED:
+                self.__Referenced  = False
+            else:
+                self.__Referenced  = True
+             
+            #self.__Ready       = self.__smc_state in self.__STATE_READY
         return resp
         # PROTECTED REGION END #    //  SMC100.get_smc_state
 
@@ -396,15 +378,12 @@ class SMC100(Device):
         self.write_read('OR')
         # PROTECTED REGION END #    //  SMC100.homing
     
-    @command
+    @command(dtype_out=str)
     @DebugIt()
     def reset(self):
         # PROTECTED REGION ID(SMC100.reset) ENABLED START #
         self.write_read('RS')
-        if self.__ERROR_OUT_OF_RANGE == self.get_cmd_error_string():
-            self.__Out_Of_Range = True
-        else:
-            self.__Out_Of_Range = False   
+        return ("Device reset, do homing now!")
         # PROTECTED REGION END #    //  SMC100.reset
 
 # ----------
