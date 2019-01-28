@@ -8,7 +8,6 @@
 # See LICENSE.txt for more info.
 
 """ Tangodevice SMC100
-
 """
 
 __all__ = ["SMC100", "main"]
