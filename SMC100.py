@@ -160,7 +160,7 @@ class SMC100(Device):
             self.__ser_port.close()
         self.__ser_port.open()
         
-        if ("SMC_CC" in self.read_controller_info()):
+        if ("SMC" in self.read_controller_info()):
             self.get_smc_state()
             self.read_position()
             self.set_state(PyTango.DevState.ON)  
