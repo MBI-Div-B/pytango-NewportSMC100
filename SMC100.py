@@ -1,14 +1,11 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# This file is part of the SMC100 project
-#
-#
-#
-# Distributed under the terms of the GPL license.
-# See LICENSE.txt for more info.
+# Copyright (C) DATE  MBI-Division-B
+# MIT License, refer to LICENSE file
+# Author: / Email: (please set DATE above to year)
 
-""" Tangodevice SMC100
-"""
+
 
 __all__ = ["SMC100", "main"]
 
@@ -30,8 +27,9 @@ import serial
 flagDebugIO = 0
 
 
-class SMC100(Device):
-    """
+class NewportSMC100(Device):
+    """ 
+    Tangodevice SMC100
     """
     __metaclass__ = DeviceMeta
     # PROTECTED REGION ID(SMC100.class_variable) ENABLED START #
@@ -395,7 +393,7 @@ class SMC100(Device):
 def main(args=None, **kwargs):
     # PROTECTED REGION ID(SMC100.main) ENABLED START #
     from PyTango.server import run
-    return run((SMC100,), args=args, **kwargs)
+    return run((NewportSMC100,), args=args, **kwargs)
     # PROTECTED REGION END #    //  SMC100.main
 
 if __name__ == '__main__':
