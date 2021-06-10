@@ -169,8 +169,8 @@ class NewportSMC100(Device):
         if flagDebugIO:
             # print "Limit-: ",self.__Limit_Minus
             # print "Limit+: ",self.__Limit_Plus
-            print "Run: ",self.__Motor_Run
-            print "Postion: ", self.__Pos    
+            print ("Run: ",self.__Motor_Run)
+            print ("Postion: ", self.__Pos)
             
         # PROTECTED REGION END #    //  SMC100.init_device
 
@@ -193,7 +193,7 @@ class NewportSMC100(Device):
         # PROTECTED REGION ID(SMC100.send_cmd) ENABLED START #
         snd_str = cmd + self.__EOL
         self.__ser_port.flushOutput()
-        self.__ser_port.write(snd_str)
+        self.__ser_port.write(snd_str.encode('utf-8'))
         self.__ser_port.flush()
         # PROTECTED REGION END #    //  SMC100.send_cmd    
 
@@ -269,7 +269,7 @@ class NewportSMC100(Device):
             send_str = self.__smcID + argin
             self.__ser_port.flushInput()
             self.send_cmd(send_str)
-            tmp_answer = self.__ser_port.readline()
+            tmp_answer = self.__ser_port.readline().decode('utf-8')
             if tmp_answer.startswith(prefix):
                 answer = tmp_answer[len(prefix):]
             else:
