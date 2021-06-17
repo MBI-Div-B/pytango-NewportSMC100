@@ -1,1 +1,0 @@
-python SMC100.py hhg
